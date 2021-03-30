@@ -1,8 +1,8 @@
 import socket
 
 ClientSocket = socket.socket()
-host = 'localhost'
-port = 9999
+host = '8.8.8.8'
+port = 53
 
 ClientSocket.settimeout(30)
 ClientSocket.connect((host, port))
