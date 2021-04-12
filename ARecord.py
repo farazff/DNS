@@ -17,13 +17,15 @@ def sendMessage(message, address, port):
     return binascii.hexlify(data).decode("utf-8")
 
 
-def buildMessage(address=""):
+def buildMessage(address, havingRecursion):
     ID = 43690  # 16-bit identifier (0-65535)
     QR = 0  # 1bit
     OPCODE = 0  # 4bit
     AA = 0  # 1bit
     TC = 0  # 1bit
     RD = 1  # 1bit
+    if not havingRecursion:
+        RD = 0  # 1bit
     RA = 0  # 1bit
     Z = 0  # 3bit
     RCode = 0  # 4bit
@@ -72,9 +74,14 @@ def decodeMessage(message):
     QCLASS_STARTS = QTYPE_STARTS + 4
     ANSWER_SECTION_STARTS = QCLASS_STARTS + 4
 
-    NUM_ANSWERS = max([int(ANCOUNT, 16), int(NSCOUNT, 16), int(ARCOUNT, 16)])
+    res.append("Answer:")
+    NUM_ANSWERS = int(ANCOUNT, 16) + int(NSCOUNT, 16) + int(ARCOUNT, 16)
     if NUM_ANSWERS > 0:
         for ANSWER_COUNT in range(NUM_ANSWERS):
+            if ANSWER_COUNT == int(ANCOUNT, 16):
+                res.append("NS:")
+            if ANSWER_COUNT == int(ANCOUNT, 16) + int(NSCOUNT, 16):
+                res.append("AR:")
             if ANSWER_SECTION_STARTS < len(message):
                 ATYPE = message[ANSWER_SECTION_STARTS + 4:ANSWER_SECTION_STARTS + 8]
                 ACLASS = message[ANSWER_SECTION_STARTS + 8:ANSWER_SECTION_STARTS + 12]
@@ -84,8 +91,8 @@ def decodeMessage(message):
                 IPString = ""
                 if ATYPE == "0001":
                     for i in range(RDLENGTH):
-                        thisPartStart = 2*i
-                        temp = RDDATA[thisPartStart:thisPartStart+2]
+                        thisPartStart = 2 * i
+                        temp = RDDATA[thisPartStart:thisPartStart + 2]
                         if IPString == "":
                             IPString = IPString + (str(int(temp, 16)))
                         else:
@@ -114,12 +121,29 @@ def parseParts(message, start, parts):
 
 def main():
     url = input("Enter URL: ")
-    message = buildMessage(url)
+
+    while True:
+        IPQuestion = input("Do you want to use 8.8.8.8 as DNS server? [y/n] ")
+        if IPQuestion == "n" or IPQuestion == "y":
+            break
+    IP = "8.8.8.8"
+    if IPQuestion == 'n':
+        IP = input("Enter your preferred IP for DNS server: ")
+
+    while True:
+        recursion = input("Do you want to have recursion? [y/n] ")
+        if recursion == "n" or recursion == "y":
+            break
+    havingRecursion = True
+    if recursion == "n":
+        havingRecursion = False
+
+    message = buildMessage(url, havingRecursion)
     print("Request:\n" + message)
 
-    response = sendMessage(message, "8.8.8.8", 53)
+    response = sendMessage(message, IP, 53)
     print("\nResponse:\n" + response)
-    print("\nResponse (decoded):\n" + decodeMessage(response))
+    print("\nResponse:\n" + decodeMessage(response))
 
 
 if __name__ == "__main__":
