@@ -137,7 +137,7 @@ def main():
     # read from file
     if fileQuestion == "y":
         fileName = input("Enter your File name: ")
-        hosts = CSV.read(fileName)
+        hosts = CSV.readHostNames(fileName)
         while True:
             IPQuestion = input("Do you want to use 8.8.8.8 as DNS server? [y/n] ")
             if IPQuestion == "n" or IPQuestion == "y":
@@ -145,17 +145,7 @@ def main():
         IP = "8.8.8.8"
         if IPQuestion == 'n':
             IP = input("Enter your preferred IP for DNS server: ")
-        answers = []
-        for i in hosts:
-            ans1 = [i[0]]
-            message = buildMessage(i[0], True)
-            response = sendMessage(message, IP, 53)
-            res = decodeMessage(response)
-            if len(res[0]) != 0:
-                for j in res[0]:
-                    ans1.append(j)
-            answers.append(deepcopy(ans1))
-        CSV.write(fileName, answers)
+        sendAndReceiveForFile(hosts, IP, fileName)
 
     # read from input
     if fileQuestion == "n":
@@ -175,27 +165,80 @@ def main():
         havingRecursion = True
         if recursion == "n":
             havingRecursion = False
+        sendAndReceiveForInput(url, IP, havingRecursion)
 
-        message = buildMessage(url, havingRecursion)
-        # print("Request:\n" + message)
+    updateCache()
 
+
+def updateCache():
+    count = deepcopy(CSV.readCountFile())
+    for t in count:
+        if t[2] == '3' and t[0] == '0':
+            t[0] = '1'
+            tempList = []
+            for i in range(len(t)):
+                if i != 0 and i != 2:
+                    tempList.append(deepcopy(t[i]))
+            CSV.addToCache(deepcopy(tempList))
+    CSV.writeCountFile(count)
+
+
+def sendAndReceiveForFile(hosts, IP, fileName):
+    answers = []
+    for i in hosts:
+        ans1 = [i[0]]
+        message = buildMessage(i[0], True)
         response = sendMessage(message, IP, 53)
-        # print("\nResponse:\n" + response)
         res = decodeMessage(response)
+        listTemp = []
         if len(res[0]) != 0:
-            print("Answer: ")
-            for i in res[0]:
-                print(i)
+            for j in res[0]:
+                ans1.append(deepcopy(j))
+                listTemp.append(deepcopy(j))
+        updateCountFile(i[0], deepcopy(listTemp))
+        answers.append(deepcopy(ans1))
+    CSV.writeIPs(fileName, answers)
 
-        if len(res[1]) != 0:
-            print("NS: ")
-            for i in res[1]:
-                print(i)
 
-        if len(res[2]) != 0:
-            print("AR: ")
-            for i in res[2]:
-                print(i)
+def sendAndReceiveForInput(url, IP, havingRecursion):
+    message = buildMessage(url, havingRecursion)
+    response = sendMessage(message, IP, 53)
+    res = decodeMessage(response)
+    if len(res[0]) != 0:
+        tempList = []
+        print("Answer: ")
+        for i in res[0]:
+            print(i)
+            tempList.append(deepcopy(i))
+        updateCountFile(url, deepcopy(tempList))
+
+    if len(res[1]) != 0:
+        print("NS: ")
+        for i in res[1]:
+            print(i)
+
+    if len(res[2]) != 0:
+        print("AR: ")
+        for i in res[2]:
+            print(i)
+
+
+def updateCountFile(url, answer):
+    count = deepcopy(CSV.readCountFile())
+    found = int(0)
+    for t in count:
+        if t[1] == url:
+            t[2] = int(t[2]) + 1
+            found = int(1)
+            break
+    if count is None:
+        count = []
+    if found == int(0):
+        tempList = [0, url, 1]
+        for i in answer:
+            tempList.append(i)
+        count.append(tempList)
+    CSV.writeCountFile(count)
 
 
 if __name__ == "__main__":
