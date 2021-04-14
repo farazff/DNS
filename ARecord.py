@@ -1,6 +1,7 @@
 import binascii
 import socket
-from copy import copy
+from copy import copy, deepcopy
+import CSV
 
 
 def sendMessage(message, address, port):
@@ -74,18 +75,19 @@ def decodeMessage(message):
     QCLASS_STARTS = QTYPE_STARTS + 4
     ANSWER_SECTION_STARTS = QCLASS_STARTS + 4
 
-    res.append("Answer:")
+    answer = []
+    ns = []
+    ar = []
+    now = int(0)
     NUM_ANSWERS = int(ANCOUNT, 16) + int(NSCOUNT, 16) + int(ARCOUNT, 16)
     if NUM_ANSWERS > 0:
         for ANSWER_COUNT in range(NUM_ANSWERS):
             if ANSWER_COUNT == int(ANCOUNT, 16):
-                res.append("NS:")
+                now = int(1)
             if ANSWER_COUNT == int(ANCOUNT, 16) + int(NSCOUNT, 16):
-                res.append("AR:")
+                now = int(2)
             if ANSWER_SECTION_STARTS < len(message):
                 ATYPE = message[ANSWER_SECTION_STARTS + 4:ANSWER_SECTION_STARTS + 8]
-                ACLASS = message[ANSWER_SECTION_STARTS + 8:ANSWER_SECTION_STARTS + 12]
-                TTL = int(message[ANSWER_SECTION_STARTS + 12:ANSWER_SECTION_STARTS + 20], 16)
                 RDLENGTH = int(message[ANSWER_SECTION_STARTS + 20:ANSWER_SECTION_STARTS + 24], 16)
                 RDDATA = message[ANSWER_SECTION_STARTS + 24:ANSWER_SECTION_STARTS + 24 + (RDLENGTH * 2)]
                 IPString = ""
@@ -97,10 +99,17 @@ def decodeMessage(message):
                             IPString = IPString + (str(int(temp, 16)))
                         else:
                             IPString = IPString + "." + (str(int(temp, 16)))
-                    res.append(copy(IPString))
+                    if now == 0:
+                        answer.append(copy(IPString))
+                    if now == 1:
+                        ns.append(copy(IPString))
+                    if now == 2:
+                        ar.append(copy(IPString))
                 ANSWER_SECTION_STARTS = ANSWER_SECTION_STARTS + 24 + (RDLENGTH * 2)
-
-    return "\n".join(res)
+    res.append(answer)
+    res.append(ns)
+    res.append(ar)
+    return res
 
 
 def parseParts(message, start, parts):
@@ -120,30 +129,73 @@ def parseParts(message, start, parts):
 
 
 def main():
-    url = input("Enter URL: ")
-
     while True:
-        IPQuestion = input("Do you want to use 8.8.8.8 as DNS server? [y/n] ")
-        if IPQuestion == "n" or IPQuestion == "y":
+        fileQuestion = input("Do you want to read from file? [y/n] ")
+        if fileQuestion == "n" or fileQuestion == "y":
             break
-    IP = "8.8.8.8"
-    if IPQuestion == 'n':
-        IP = input("Enter your preferred IP for DNS server: ")
 
-    while True:
-        recursion = input("Do you want to have recursion? [y/n] ")
-        if recursion == "n" or recursion == "y":
-            break
-    havingRecursion = True
-    if recursion == "n":
-        havingRecursion = False
+    # read from file
+    if fileQuestion == "y":
+        fileName = input("Enter your File name: ")
+        hosts = CSV.read(fileName)
+        while True:
+            IPQuestion = input("Do you want to use 8.8.8.8 as DNS server? [y/n] ")
+            if IPQuestion == "n" or IPQuestion == "y":
+                break
+        IP = "8.8.8.8"
+        if IPQuestion == 'n':
+            IP = input("Enter your preferred IP for DNS server: ")
+        answers = []
+        for i in hosts:
+            ans1 = [i[0]]
+            message = buildMessage(i[0], True)
+            response = sendMessage(message, IP, 53)
+            res = decodeMessage(response)
+            if len(res[0]) != 0:
+                for j in res[0]:
+                    ans1.append(j)
+            answers.append(deepcopy(ans1))
+        CSV.write(fileName, answers)
 
-    message = buildMessage(url, havingRecursion)
-    print("Request:\n" + message)
+    # read from input
+    if fileQuestion == "n":
+        url = input("Enter URL: ")
+        while True:
+            IPQuestion = input("Do you want to use 8.8.8.8 as DNS server? [y/n] ")
+            if IPQuestion == "n" or IPQuestion == "y":
+                break
+        IP = "8.8.8.8"
+        if IPQuestion == 'n':
+            IP = input("Enter your preferred IP for DNS server: ")
 
-    response = sendMessage(message, IP, 53)
-    print("\nResponse:\n" + response)
-    print("\nResponse:\n" + decodeMessage(response))
+        while True:
+            recursion = input("Do you want to have recursion? [y/n] ")
+            if recursion == "n" or recursion == "y":
+                break
+        havingRecursion = True
+        if recursion == "n":
+            havingRecursion = False
+
+        message = buildMessage(url, havingRecursion)
+        # print("Request:\n" + message)
+
+        response = sendMessage(message, IP, 53)
+        # print("\nResponse:\n" + response)
+        res = decodeMessage(response)
+        if len(res[0]) != 0:
+            print("Answer: ")
+            for i in res[0]:
+                print(i)
+
+        if len(res[1]) != 0:
+            print("NS: ")
+            for i in res[1]:
+                print(i)
+
+        if len(res[2]) != 0:
+            print("AR: ")
+            for i in res[2]:
+                print(i)
 
 
 if __name__ == "__main__":
