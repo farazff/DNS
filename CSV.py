@@ -5,7 +5,7 @@ import os
 def read(add):
     fields = []
     rows = []
-    filename = "hosts.csv"
+    filename = add + "csv"
     with open(filename, 'r') as csvFile:
         reader = csv.reader(csvFile)
         fields = next(reader)
