@@ -9,13 +9,16 @@ def sendMessage(message, address, port):
     server_address = (address, port)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(5)
     sock.connect(server_address)
     try:
         sock.send(bytes.fromhex(message))
         data, _ = sock.recvfrom(4096)
+        return binascii.hexlify(data).decode("utf-8")
+    except socket.timeout as e:
+        sock.close()
     finally:
         sock.close()
-    return binascii.hexlify(data).decode("utf-8")
 
 
 def buildMessage(address, havingRecursion):
@@ -150,6 +153,12 @@ def main():
     # read from input
     if fileQuestion == "n":
         url = input("Enter URL: ")
+        check = CSV.checkInCache(url)
+        if check is not None:
+            print("Answer: ")
+            for i in check:
+                print(i)
+            exit(0)
         while True:
             IPQuestion = input("Do you want to use 8.8.8.8 as DNS server? [y/n] ")
             if IPQuestion == "n" or IPQuestion == "y":
@@ -187,8 +196,17 @@ def sendAndReceiveForFile(hosts, IP, fileName):
     answers = []
     for i in hosts:
         ans1 = [i[0]]
+        check = CSV.checkInCache(i[0])
+        if check is not None:
+            for j in check:
+                ans1.append(deepcopy(j))
+            answers.append(deepcopy(ans1))
+            continue
         message = buildMessage(i[0], True)
         response = sendMessage(message, IP, 53)
+        if response is None:
+            print("Couldn't find i[0]")
+            continue
         res = decodeMessage(response)
         listTemp = []
         if len(res[0]) != 0:
@@ -200,27 +218,36 @@ def sendAndReceiveForFile(hosts, IP, fileName):
     CSV.writeIPs(fileName, answers)
 
 
+fringe = []
+
+
 def sendAndReceiveForInput(url, IP, havingRecursion):
     message = buildMessage(url, havingRecursion)
     response = sendMessage(message, IP, 53)
-    res = decodeMessage(response)
-    if len(res[0]) != 0:
+    res = None
+    if response is not None:
+        res = decodeMessage(response)
+
+    if res is not None and len(res[0]) != 0:
         tempList = []
         print("Answer: ")
         for i in res[0]:
             print(i)
             tempList.append(deepcopy(i))
         updateCountFile(url, deepcopy(tempList))
+        return
 
-    if len(res[1]) != 0:
-        print("NS: ")
-        for i in res[1]:
-            print(i)
+    else:
+        if res is not None and len(res[2]) != 0:
+            # print("AR: ")
+            for i in res[2]:
+                fringe.append(i)
+        if len(fringe) == 0:
+            print("please try again :(")
+            exit(0)
 
-    if len(res[2]) != 0:
-        print("AR: ")
-        for i in res[2]:
-            print(i)
+        temp = fringe.pop(0)
+        sendAndReceiveForInput(url, temp, havingRecursion)
 
 
 def updateCountFile(url, answer):

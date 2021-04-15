@@ -70,3 +70,18 @@ def addToCache(oneRow):
         writer.writerow(fields)
         for i in rows:
             writer.writerow(i)
+
+
+def checkInCache(url):
+    fields = []
+    rows = []
+    filename = "cache.csv"
+    with open(filename, 'r') as csvFile:
+        reader = csv.reader(csvFile)
+        fields = next(reader)
+        for row in reader:
+            rows.append(row)
+    for i in rows:
+        if i[0] == url:
+            return i[1:]
+    return None
